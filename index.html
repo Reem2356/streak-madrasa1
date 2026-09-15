@@ -482,7 +482,7 @@
       return tx.get(subRef).then(function(subSnap){
         if(subSnap.exists) throw new Error("already-submitted");
         tx.set(subRef, subData);
-        tx.update(studentRef, { submissionsCount: FieldValue.increment(1) });
+        tx.update(studentRef, { submissionsCount: FieldValue.increment(1), lastWeek: weekKey });
       });
     });
   }
@@ -925,12 +925,17 @@
     if(!session){ return goAuth(); }
 
     renderLoading();
+    var weekKey = todayWeekKey();
     db_getStudent(session).then(function(student){
       if(!student){ return goAuth(); }
       renderChip(student);
-      return db_hasSubmittedWeek(session, todayWeekKey()).then(function(already){
-        if(already) renderDashboard(session);
-        else renderSubmit(session);
+      return db_hasSubmittedWeek(session, weekKey).then(function(already){
+        if(already){
+          return Promise.all([ db_getSubmissions(session), computeRanking() ]).then(function(results){
+            buildDashboardScreen(session, student, results[0], results[1]);
+          });
+        }
+        buildSubmitScreen(session, student, weekKey, false);
       });
     }).catch(function(){
       renderConnError(boot);

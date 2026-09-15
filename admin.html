@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>لوحة إدارة ستريك مدرستي</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Lalezar&family=Cairo:wght@400;500;600;700;800;900&display=swap');
+
+  :root{
+    --bg: #FBF6EC;
+    --surface: #FFFFFF;
+    --surface-soft: #FAF5EA;
+    --ink: #0B3B34;
+    --ink-2: #0F4C43;
+    --ink-3: #123F38;
+    --text: #1D2B27;
+    --text-muted: #6B7C76;
+    --turquoise: #159B90;
+    --turquoise-2: #1FBBAC;
+    --turquoise-tint: #E1F5F2;
+    --gold: #CE9A34;
+    --gold-2: #E8B94A;
+    --gold-tint: #FBF0D9;
+    --rose: #E07E96;
+    --rose-tint: #FBE9EE;
+    --green-ok: #2E8B57;
+    --line: #E7DFCC;
+    --shadow-soft: 0 4px 14px -6px rgba(11,59,52,.18);
+    --radius: 16px;
+  }
+
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:'Cairo','Segoe UI',Tahoma,sans-serif;
+    direction:rtl;
+    min-height:100vh;
+    font-variant-numeric: tabular-nums;
+  }
+  h1,h2,h3{ font-family:'Lalezar','Cairo',sans-serif; font-weight:400; margin:0; }
+  button{ font-family:inherit; }
+  [hidden]{ display:none !important; }
+
+  /* ---- gate ---- */
+  #gateScreen{
+    min-height:100vh; display:flex; align-items:center; justify-content:center; padding:20px;
+  }
+  .gate-card{
+    background:var(--surface); border:1px solid var(--line); border-radius:20px;
+    box-shadow:var(--shadow-soft); padding:32px 28px; width:100%; max-width:360px; text-align:center;
+  }
+  .gate-card h1{ font-size:1.6rem; color:var(--ink); margin-bottom:6px; }
+  .gate-card p{ color:var(--text-muted); font-size:.85rem; margin-bottom:18px; }
+  .gate-card input{
+    width:100%; padding:11px 14px; border-radius:12px; border:1.5px solid var(--line);
+    font-size:.95rem; font-family:inherit; background:var(--surface-soft); margin-bottom:12px; text-align:center;
+  }
+  .gate-card input:focus{ outline:none; border-color:var(--turquoise); background:#fff; }
+  .gate-btn{
+    width:100%; padding:12px; border-radius:12px; border:none; cursor:pointer;
+    background:linear-gradient(135deg, var(--turquoise-2), var(--turquoise)); color:#fff;
+    font-weight:800; font-size:.95rem;
+  }
+  .gate-err{ color:#9C2E48; font-size:.8rem; margin-top:10px; min-height:1em; }
+
+  /* ---- admin shell ---- */
+  #adminScreen{ padding:24px 20px 60px; max-width:1100px; margin:0 auto; }
+  .admin-header{
+    display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;
+    margin-bottom:22px;
+  }
+  .admin-header h1{ font-size:1.7rem; color:var(--ink); }
+  .admin-header span{ font-size:.8rem; color:var(--text-muted); }
+  .header-actions{ display:flex; gap:8px; }
+  .icon-btn{
+    background:var(--surface); border:1px solid var(--line); color:var(--ink-3);
+    padding:8px 14px; border-radius:10px; cursor:pointer; font-size:.82rem; font-weight:700;
+  }
+  .icon-btn:hover{ border-color:var(--turquoise); color:var(--turquoise); }
+
+  .stat-row{ display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:22px; }
+  @media (max-width:700px){ .stat-row{ grid-template-columns:repeat(2,1fr); } }
+  .stat-tile{
+    background:var(--surface); border:1px solid var(--line); border-radius:var(--radius);
+    padding:16px; text-align:center; box-shadow:var(--shadow-soft);
+  }
+  .stat-tile .num{ font-family:'Lalezar'; font-size:1.9rem; color:var(--ink); line-height:1; }
+  .stat-tile .lbl{ font-size:.75rem; color:var(--text-muted); font-weight:700; margin-top:4px; }
+
+  .filters{
+    display:flex; gap:10px; flex-wrap:wrap; margin-bottom:16px;
+    background:var(--surface); border:1px solid var(--line); border-radius:var(--radius);
+    padding:14px; box-shadow:var(--shadow-soft);
+  }
+  .filters input, .filters select{
+    padding:9px 12px; border-radius:10px; border:1.5px solid var(--line);
+    font-family:inherit; font-size:.85rem; background:var(--surface-soft); color:var(--text);
+  }
+  .filters input{ flex:1; min-width:160px; }
+  .filters input:focus, .filters select:focus{ outline:none; border-color:var(--turquoise); }
+
+  .table-wrap{
+    background:var(--surface); border:1px solid var(--line); border-radius:var(--radius);
+    box-shadow:var(--shadow-soft); overflow-x:auto;
+  }
+  table{ width:100%; border-collapse:collapse; min-width:640px; }
+  thead th{
+    text-align:right; font-size:.76rem; color:var(--text-muted); font-weight:700;
+    padding:12px 14px; border-bottom:1px solid var(--line); white-space:nowrap;
+  }
+  tbody td{
+    padding:11px 14px; font-size:.85rem; border-bottom:1px solid var(--line); vertical-align:middle;
+  }
+  tbody tr:last-child td{ border-bottom:none; }
+  tbody tr:hover{ background:var(--surface-soft); }
+  .rank-badge{
+    display:inline-flex; align-items:center; justify-content:center;
+    width:26px; height:26px; border-radius:50%; font-weight:800; font-size:.8rem;
+    background:var(--surface-soft); border:1px solid var(--line); color:var(--ink-3);
+  }
+  .rank-badge.r1{ background:linear-gradient(145deg, var(--gold-2), var(--gold)); color:#fff; border-color:transparent; }
+  .rank-badge.r2{ background:linear-gradient(145deg,#C7D3D0,#96A8A4); color:#fff; border-color:transparent; }
+  .rank-badge.r3{ background:linear-gradient(145deg,#D6A579,#B97B4F); color:#fff; border-color:transparent; }
+  .name-cell b{ display:block; font-size:.88rem; color:var(--ink-3); }
+  .name-cell small{ color:var(--text-muted); font-size:.72rem; }
+  .count-pill{
+    font-family:'Lalezar'; font-size:1.1rem; color:var(--turquoise);
+  }
+  .status-ok{ color:var(--green-ok); font-weight:700; font-size:.8rem; }
+  .status-no{ color:#9C2E48; font-weight:700; font-size:.8rem; }
+  .view-btn{
+    background:var(--turquoise-tint); color:var(--turquoise); border:none;
+    padding:6px 12px; border-radius:8px; cursor:pointer; font-size:.78rem; font-weight:700;
+  }
+  .view-btn:hover{ background:var(--turquoise); color:#fff; }
+  .empty-row td{ text-align:center; color:var(--text-muted); padding:30px 0; }
+
+  /* ---- modal ---- */
+  .modal-backdrop{
+    position:fixed; inset:0; background:rgba(11,59,52,.55); z-index:60;
+    display:flex; align-items:center; justify-content:center; padding:20px;
+  }
+  .modal{
+    background:var(--surface); border-radius:20px; max-width:520px; width:100%;
+    max-height:80vh; overflow-y:auto; padding:22px; box-shadow:0 20px 50px -12px rgba(0,0,0,.35);
+  }
+  .modal-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; }
+  .modal-head h3{ font-size:1.2rem; color:var(--ink); }
+  .modal-close{ background:none; border:none; font-size:1.3rem; cursor:pointer; color:var(--text-muted); }
+  .modal-close:hover{ color:var(--ink); }
+  .sub-item{
+    display:flex; align-items:center; gap:12px; background:var(--surface-soft);
+    border:1px solid var(--line); border-radius:12px; padding:9px 12px; margin-bottom:8px;
+  }
+  .sub-item img{ width:52px; height:52px; border-radius:10px; object-fit:cover; border:1px solid var(--line); cursor:zoom-in; }
+  .sub-item .si-text b{ display:block; font-size:.85rem; color:var(--ink-3); }
+  .sub-item .si-text span{ font-size:.72rem; color:var(--text-muted); }
+
+  .loading-line{ text-align:center; color:var(--text-muted); padding:16px; font-size:.85rem; }
+</style>
+</head>
+<body>
+
+<div id="gateScreen">
+  <div class="gate-card">
+    <h1>🔒 لوحة الإدارة</h1>
+    <p>هذه الصفحة مخصصة لمديرة المدرسة ومسؤولة المبادرة فقط</p>
+    <input type="password" id="gatePass" placeholder="كلمة المرور" />
+    <button class="gate-btn" id="gateBtn">دخول</button>
+    <div class="gate-err" id="gateErr"></div>
+  </div>
+</div>
+
+<div id="adminScreen" hidden>
+  <div class="admin-header">
+    <div>
+      <h1>لوحة إدارة ستريك مدرستي</h1>
+      <span>المتوسطة السابعة بعرعر</span>
+    </div>
+    <div class="header-actions">
+      <button class="icon-btn" id="refreshBtn">🔄 تحديث</button>
+    </div>
+  </div>
+
+  <div class="stat-row">
+    <div class="stat-tile"><div class="num" id="statTotal">–</div><div class="lbl">إجمالي الطالبات</div></div>
+    <div class="stat-tile"><div class="num" id="statSubs">–</div><div class="lbl">إجمالي المشاركات</div></div>
+    <div class="stat-tile"><div class="num" id="statWeek">–</div><div class="lbl">شاركن هذا الأسبوع</div></div>
+    <div class="stat-tile"><div class="num" id="statMissing">–</div><div class="lbl">لم يشاركن بعد</div></div>
+  </div>
+
+  <div class="filters">
+    <input type="text" id="searchInput" placeholder="ابحثي باسم الطالبة أو اسم المستخدم..." />
+    <select id="gradeFilter"><option value="">كل الصفوف</option></select>
+    <select id="sectionFilter"><option value="">كل الفصول</option></select>
+    <select id="weekFilter">
+      <option value="">كل الطالبات</option>
+      <option value="done">شاركن هذا الأسبوع</option>
+      <option value="missing">لم يشاركن بعد</option>
+    </select>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>الطالبة</th>
+          <th>الصف / الفصل</th>
+          <th>عدد المشاركات</th>
+          <th>هذا الأسبوع</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="tableBody">
+        <tr class="empty-row"><td colspan="6">جارٍ التحميل...</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div id="modalRoot"></div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
+<script>
+(function(){
+  "use strict";
+
+  var ADMIN_PASSWORD = "مدرستي2026";
+
+  var firebaseConfig = {
+    apiKey: "AIzaSyABziPJeOsWkqL1Bwlw25QOex1f8abP1kM",
+    authDomain: "streak-madrasa.firebaseapp.com",
+    projectId: "streak-madrasa",
+    storageBucket: "streak-madrasa.firebasestorage.app",
+    messagingSenderId: "707992205215",
+    appId: "1:707992205215:web:ac439d0ce2297871e86faa"
+  };
+  firebase.initializeApp(firebaseConfig);
+  var fs = firebase.firestore();
+
+  var GRADES = ["الأول متوسط", "الثاني متوسط", "الثالث متوسط"];
+  var SECTIONS = ["١", "٢", "موهبة"];
+  var GATE_KEY = "streakMadrasa_admin_unlocked";
+
+  function classLabel(student){
+    if(!student || !student.section) return student ? (student.grade||"") : "";
+    var sectionText = student.section === "موهبة" ? "موهبة" : ("فصل " + student.section);
+    return (student.grade||"") + " · " + sectionText;
+  }
+
+  function isoWeekKey(d){
+    var date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+    var day = date.getUTCDay() || 7;
+    date.setUTCDate(date.getUTCDate() + 4 - day);
+    var yearStart = new Date(Date.UTC(date.getUTCFullYear(),0,1));
+    var weekNo = Math.ceil((((date - yearStart) / 86400000) + 1)/7);
+    return date.getUTCFullYear() + "-W" + (weekNo < 10 ? "0"+weekNo : weekNo);
+  }
+  function todayWeekKey(){ return isoWeekKey(new Date()); }
+
+  function fmtDate(iso){
+    var d = new Date(iso);
+    return d.toLocaleDateString("ar-SA", { day:"numeric", month:"long", year:"numeric" });
+  }
+
+  function initials(name){
+    name = (name||"").trim();
+    return name ? name[0] : "؟";
+  }
+
+  /* ---------------- gate ---------------- */
+  var gateScreen = document.getElementById("gateScreen");
+  var adminScreen = document.getElementById("adminScreen");
+  var gatePass = document.getElementById("gatePass");
+  var gateBtn = document.getElementById("gateBtn");
+  var gateErr = document.getElementById("gateErr");
+
+  function unlock(){
+    gateScreen.hidden = true;
+    adminScreen.hidden = false;
+    loadData();
+  }
+
+  function tryUnlock(){
+    if(gatePass.value === ADMIN_PASSWORD){
+      try{ sessionStorage.setItem(GATE_KEY, "1"); }catch(e){}
+      unlock();
+    } else {
+      gateErr.textContent = "كلمة المرور غير صحيحة.";
+    }
+  }
+  gateBtn.addEventListener("click", tryUnlock);
+  gatePass.addEventListener("keydown", function(e){ if(e.key === "Enter") tryUnlock(); });
+
+  try{
+    if(sessionStorage.getItem(GATE_KEY) === "1") unlock();
+  }catch(e){}
+
+  /* ---------------- data ---------------- */
+  var allStudents = [];
+
+  function loadData(){
+    var tbody = document.getElementById("tableBody");
+    tbody.innerHTML = '<tr class="empty-row"><td colspan="6">جارٍ التحميل...</td></tr>';
+
+    fs.collection("students").orderBy("submissionsCount", "desc").limit(2000).get().then(function(qs){
+      allStudents = [];
+      qs.forEach(function(doc){ allStudents.push(Object.assign({ username: doc.id }, doc.data())); });
+      populateFilters();
+      renderStats();
+      renderTable();
+    }).catch(function(e){
+      tbody.innerHTML = '<tr class="empty-row"><td colspan="6">تعذّر تحميل البيانات. تأكدي من الاتصال بالإنترنت وحاولي التحديث.</td></tr>';
+    });
+  }
+
+  function populateFilters(){
+    var gradeSel = document.getElementById("gradeFilter");
+    var sectionSel = document.getElementById("sectionFilter");
+    if(gradeSel.options.length <= 1){
+      GRADES.forEach(function(g){
+        var o = document.createElement("option"); o.value = g; o.textContent = g;
+        gradeSel.appendChild(o);
+      });
+    }
+    if(sectionSel.options.length <= 1){
+      SECTIONS.forEach(function(s){
+        var o = document.createElement("option"); o.value = s; o.textContent = s === "موهبة" ? "موهبة" : ("فصل " + s);
+        sectionSel.appendChild(o);
+      });
+    }
+  }
+
+  function renderStats(){
+    var weekKey = todayWeekKey();
+    var total = allStudents.length;
+    var totalSubs = allStudents.reduce(function(sum,s){ return sum + (s.submissionsCount||0); }, 0);
+    var doneThisWeek = allStudents.filter(function(s){ return s.lastWeek === weekKey; }).length;
+    document.getElementById("statTotal").textContent = total;
+    document.getElementById("statSubs").textContent = totalSubs;
+    document.getElementById("statWeek").textContent = doneThisWeek;
+    document.getElementById("statMissing").textContent = total - doneThisWeek;
+  }
+
+  function computeRankedList(){
+    var rank = 0, prevCount = null, seen = 0;
+    return allStudents.map(function(s){
+      seen++;
+      var count = s.submissionsCount || 0;
+      if(count !== prevCount){ rank = seen; prevCount = count; }
+      return Object.assign({ rank: rank }, s);
+    });
+  }
+
+  function renderTable(){
+    var weekKey = todayWeekKey();
+    var search = document.getElementById("searchInput").value.trim().toLowerCase();
+    var gradeF = document.getElementById("gradeFilter").value;
+    var sectionF = document.getElementById("sectionFilter").value;
+    var weekF = document.getElementById("weekFilter").value;
+
+    var ranked = computeRankedList().filter(function(s){
+      if(search){
+        var hay = ((s.displayName||"") + " " + s.username).toLowerCase();
+        if(hay.indexOf(search) === -1) return false;
+      }
+      if(gradeF && s.grade !== gradeF) return false;
+      if(sectionF && s.section !== sectionF) return false;
+      var didThisWeek = s.lastWeek === weekKey;
+      if(weekF === "done" && !didThisWeek) return false;
+      if(weekF === "missing" && didThisWeek) return false;
+      return true;
+    });
+
+    var tbody = document.getElementById("tableBody");
+    if(!ranked.length){
+      tbody.innerHTML = '<tr class="empty-row"><td colspan="6">لا توجد نتائج مطابقة.</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = ranked.map(function(s){
+      var badgeCls = s.rank===1?" r1":s.rank===2?" r2":s.rank===3?" r3":"";
+      var didThisWeek = s.lastWeek === weekKey;
+      return '<tr>' +
+        '<td><span class="rank-badge' + badgeCls + '">' + s.rank + '</span></td>' +
+        '<td class="name-cell"><b>' + (s.displayName||"") + '</b><small>@' + s.username + '</small></td>' +
+        '<td>' + classLabel(s) + '</td>' +
+        '<td class="count-pill">' + (s.submissionsCount||0) + '</td>' +
+        '<td>' + (didThisWeek ? '<span class="status-ok">✔ نعم</span>' : '<span class="status-no">✘ لا</span>') + '</td>' +
+        '<td><button class="view-btn" data-username="' + s.username + '">عرض السجل</button></td>' +
+      '</tr>';
+    }).join("");
+
+    tbody.querySelectorAll(".view-btn").forEach(function(btn){
+      btn.addEventListener("click", function(){ openHistoryModal(btn.getAttribute("data-username")); });
+    });
+  }
+
+  ["searchInput","gradeFilter","sectionFilter","weekFilter"].forEach(function(id){
+    var el = document.getElementById(id);
+    el.addEventListener("input", renderTable);
+    el.addEventListener("change", renderTable);
+  });
+
+  document.getElementById("refreshBtn").addEventListener("click", loadData);
+
+  /* ---------------- history modal ---------------- */
+  var modalRoot = document.getElementById("modalRoot");
+
+  function openHistoryModal(username){
+    var student = allStudents.find(function(s){ return s.username === username; });
+    modalRoot.innerHTML =
+      '<div class="modal-backdrop" id="modalBackdrop">' +
+        '<div class="modal">' +
+          '<div class="modal-head"><h3>سجل ' + (student ? student.displayName : username) + '</h3><button class="modal-close" id="modalClose">✕</button></div>' +
+          '<div id="modalBody" class="loading-line">جارٍ التحميل...</div>' +
+        '</div>' +
+      '</div>';
+
+    document.getElementById("modalClose").addEventListener("click", closeModal);
+    document.getElementById("modalBackdrop").addEventListener("click", function(e){
+      if(e.target.id === "modalBackdrop") closeModal();
+    });
+
+    fs.collection("students").doc(username).collection("submissions").orderBy("dateISO", "desc").get().then(function(qs){
+      var body = document.getElementById("modalBody");
+      if(!body) return;
+      if(qs.empty){
+        body.innerHTML = '<p style="text-align:center;color:var(--text-muted);font-size:.85rem;">لا توجد مشاركات مسجّلة بعد.</p>';
+        return;
+      }
+      var html = "";
+      qs.forEach(function(doc){
+        var d = doc.data();
+        html += '<div class="sub-item">' +
+          '<img src="' + d.image + '" alt="صورة مشاركة الأسبوع ' + doc.id + '" data-full="' + d.image + '" />' +
+          '<div class="si-text"><b>الأسبوع ' + doc.id.split("-W")[1] + ' &middot; ' + doc.id.split("-W")[0] + '</b><span>' + fmtDate(d.dateISO) + '</span></div>' +
+        '</div>';
+      });
+      body.innerHTML = html;
+      body.querySelectorAll("img").forEach(function(img){
+        img.addEventListener("click", function(){ window.open(img.getAttribute("data-full"), "_blank"); });
+      });
+    }).catch(function(){
+      var body = document.getElementById("modalBody");
+      if(body) body.innerHTML = '<p style="text-align:center;color:#9C2E48;font-size:.85rem;">تعذّر تحميل السجل.</p>';
+    });
+  }
+
+  function closeModal(){ modalRoot.innerHTML = ""; }
+
+})();
+</script>
+</body>
+</html>
