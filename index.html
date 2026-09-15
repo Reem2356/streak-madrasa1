@@ -480,6 +480,19 @@
   function db_createStudent(username, data){
     return fs.collection("students").doc(username).set(Object.assign({ submissionsCount: 0 }, data));
   }
+  function normalizeEmail(email){
+    return (email||"").trim().toLowerCase();
+  }
+  function db_isEmailAllowed(email){
+    return fs.collection("allowedEmails").doc(normalizeEmail(email)).get().then(function(snap){
+      if(!snap.exists) return { allowed:false, claimedBy:null };
+      var data = snap.data() || {};
+      return { allowed:true, claimedBy: data.claimedBy || null };
+    });
+  }
+  function db_claimEmail(email, username){
+    return fs.collection("allowedEmails").doc(normalizeEmail(email)).update({ claimedBy: username });
+  }
   function db_hasSubmittedWeek(username, weekKey){
     return fs.collection("students").doc(username).collection("submissions").doc(weekKey).get().then(function(snap){
       return snap.exists;
@@ -637,6 +650,7 @@
       '<div id="errorSlot"></div>' +
       '<div class="field"><label>الاسم الكامل</label><input id="authName" type="text" placeholder="مثال: نورة سعد" autocomplete="off" /></div>' +
       '<div class="field"><label>اسم المستخدم</label><input id="authUser" type="text" placeholder="اختاري اسم مستخدم تتذكرينه" autocomplete="off" /><div class="hint">إن كان هذا اسم مستخدم استخدمتِه من قبل، سيتم الدخول مباشرة إلى حسابكِ.</div></div>' +
+      '<div class="field"><label>البريد الإلكتروني</label><input id="authEmail" type="email" placeholder="بريدك المصرّح به من إدارة المدرسة" autocomplete="off" /><div class="hint">يُستخدم فقط عند إنشاء حساب جديد، للتأكد من أنكِ مصرّح لكِ بالدخول.</div></div>' +
       '<div class="field"><label>الصف الدراسي</label><select id="authGrade">' +
         GRADES.map(function(g){ return '<option value="'+g+'">'+g+'</option>'; }).join("") +
       '</select></div>' +
@@ -656,6 +670,7 @@
     function submit(){
       var name = wrap.querySelector("#authName").value.trim();
       var user = wrap.querySelector("#authUser").value.trim();
+      var email = normalizeEmail(wrap.querySelector("#authEmail").value);
       var grade = wrap.querySelector("#authGrade").value;
       var section = wrap.querySelector("#authSection").value;
       errorSlot.innerHTML = "";
@@ -666,6 +681,8 @@
       authBtn.disabled = true;
       authBtn.textContent = "جارٍ التحقق...";
 
+      function resetBtn(){ authBtn.disabled = false; authBtn.textContent = "دخول 🔥"; }
+
       db_getStudent(user).then(function(existing){
         if(existing){
           setSessionUser(user);
@@ -674,16 +691,23 @@
           return;
         }
 
-        if(!name){ authBtn.disabled=false; authBtn.textContent="دخول 🔥"; return showError("فضلًا اكتبي اسمكِ الكامل."); }
+        if(!name){ resetBtn(); return showError("فضلًا اكتبي اسمكِ الكامل."); }
+        if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){ resetBtn(); return showError("فضلًا اكتبي بريدًا إلكترونيًا صحيحًا."); }
 
-        return db_createStudent(user, { displayName:name, grade:grade, section:section, createdAt:new Date().toISOString() }).then(function(){
-          setSessionUser(user);
-          renderChip({ username:user, displayName:name, grade:grade, section:section, submissionsCount:0 });
-          goSubmit(user);
+        return db_isEmailAllowed(email).then(function(res){
+          if(!res.allowed){ resetBtn(); return showError("هذا البريد الإلكتروني غير مصرّح له بالدخول للموقع، تواصلي مع إدارة المدرسة."); }
+          if(res.claimedBy && res.claimedBy !== user){ resetBtn(); return showError("هذا البريد الإلكتروني مستخدم مسبقًا لحساب آخر."); }
+
+          return db_createStudent(user, { displayName:name, grade:grade, section:section, email:email, createdAt:new Date().toISOString() }).then(function(){
+            return db_claimEmail(email, user);
+          }).then(function(){
+            setSessionUser(user);
+            renderChip({ username:user, displayName:name, grade:grade, section:section, submissionsCount:0 });
+            goSubmit(user);
+          });
         });
       }).catch(function(e){
-        authBtn.disabled = false;
-        authBtn.textContent = "دخول 🔥";
+        resetBtn();
         showError(friendlyDbError(e));
       });
     }

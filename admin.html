@@ -166,6 +166,31 @@
   .sub-item .si-text span{ font-size:.72rem; color:var(--text-muted); }
 
   .loading-line{ text-align:center; color:var(--text-muted); padding:16px; font-size:.85rem; }
+
+  .emails-card{
+    background:var(--surface); border:1px solid var(--line); border-radius:var(--radius);
+    box-shadow:var(--shadow-soft); padding:20px; margin-top:18px;
+  }
+  .emails-hint{ font-size:.82rem; color:var(--text-muted); margin:0 0 12px; line-height:1.6; }
+  .emails-textarea{
+    width:100%; min-height:90px; padding:10px 12px; border-radius:10px; border:1.5px solid var(--line);
+    font-family:inherit; font-size:.85rem; background:var(--surface-soft); color:var(--text);
+    resize:vertical; margin-bottom:10px; direction:ltr; text-align:right;
+  }
+  .emails-textarea:focus{ outline:none; border-color:var(--turquoise); }
+  #emailsMsg{ margin-top:10px; font-size:.82rem; }
+  #emailsMsg .ok{ color:var(--green-ok); font-weight:700; }
+  #emailsMsg .err{ color:#9C2E48; font-weight:700; }
+  .emails-list{ margin-top:14px; display:flex; flex-direction:column; gap:8px; }
+  .email-row{
+    display:flex; align-items:center; gap:10px; justify-content:space-between;
+    background:var(--surface-soft); border:1px solid var(--line); border-radius:10px; padding:8px 12px;
+  }
+  .email-row .addr{ font-size:.82rem; color:var(--ink-3); direction:ltr; text-align:right; }
+  .email-row .status{ font-size:.72rem; font-weight:700; }
+  .email-row .status.used{ color:var(--turquoise); }
+  .email-row .status.free{ color:var(--text-muted); }
+  .email-row .row-actions{ margin-inline-start:auto; }
 </style>
 </head>
 <body>
@@ -225,6 +250,16 @@
         <tr class="empty-row"><td colspan="6">جارٍ التحميل...</td></tr>
       </tbody>
     </table>
+  </div>
+
+  <div class="emails-card">
+    <div class="section-title"><span class="ico">📧</span><h3>الطالبات المصرّح لهن بالدخول للموقع</h3></div>
+    <p class="emails-hint">أضيفي هنا البريد الإلكتروني لكل طالبة مسموح لها بإنشاء حساب على الموقع (بريد واحد في كل سطر). أي بريد غير مضاف هنا لن يتمكن صاحبه من التسجيل.</p>
+    <textarea id="emailsTextarea" class="emails-textarea" placeholder="example1@school.sa
+example2@school.sa"></textarea>
+    <button class="btn btn-primary" id="addEmailsBtn" style="width:auto;padding:10px 22px;">➕ إضافة البريد/البريدات</button>
+    <div id="emailsMsg"></div>
+    <div class="emails-list" id="emailsList"></div>
   </div>
 </div>
 
@@ -290,6 +325,7 @@
     gateScreen.hidden = true;
     adminScreen.hidden = false;
     loadData();
+    loadAllowedEmails();
   }
 
   function tryUnlock(){
@@ -437,16 +473,20 @@
     });
   }
 
-  function deleteStudent(username, displayName){
-    if(!confirm('هل أنتِ متأكدة من حذف الطالبة "' + displayName + '" وجميع مشاركاتها نهائيًا؟ لا يمكن التراجع عن هذا الإجراء.')) return;
+  function performDeleteStudent(username){
     var studentRef = fs.collection("students").doc(username);
-    studentRef.collection("submissions").get().then(function(qs){
+    return studentRef.collection("submissions").get().then(function(qs){
       var deletes = [];
       qs.forEach(function(doc){ deletes.push(doc.ref.delete()); });
       return Promise.all(deletes);
     }).then(function(){
       return studentRef.delete();
-    }).then(function(){
+    });
+  }
+
+  function deleteStudent(username, displayName){
+    if(!confirm('هل أنتِ متأكدة من حذف الطالبة "' + displayName + '" وجميع مشاركاتها نهائيًا؟ لا يمكن التراجع عن هذا الإجراء.')) return;
+    performDeleteStudent(username).then(function(){
       loadData();
     }).catch(function(){
       alert("تعذّر حذف الطالبة، حاولي مرة أخرى.");
@@ -505,6 +545,83 @@
   }
 
   function closeModal(){ modalRoot.innerHTML = ""; }
+
+  /* ---------------- allowed-emails whitelist ---------------- */
+  function normalizeEmail(email){
+    return (email||"").trim().toLowerCase();
+  }
+
+  var addEmailsBtn = document.getElementById("addEmailsBtn");
+  var emailsTextarea = document.getElementById("emailsTextarea");
+  var emailsMsg = document.getElementById("emailsMsg");
+  var emailsList = document.getElementById("emailsList");
+
+  function loadAllowedEmails(){
+    emailsList.innerHTML = '<div class="loading-line">جارٍ التحميل...</div>';
+    fs.collection("allowedEmails").orderBy(firebase.firestore.FieldPath.documentId()).limit(2000).get().then(function(qs){
+      var rows = [];
+      qs.forEach(function(doc){ rows.push(Object.assign({ email: doc.id }, doc.data())); });
+      renderEmailsList(rows);
+    }).catch(function(){
+      emailsList.innerHTML = '<div class="loading-line">تعذّر تحميل القائمة.</div>';
+    });
+  }
+
+  function renderEmailsList(rows){
+    if(!rows.length){
+      emailsList.innerHTML = '<div class="loading-line">لا توجد بريدات مضافة بعد.</div>';
+      return;
+    }
+    emailsList.innerHTML = rows.map(function(r){
+      var used = !!r.claimedBy;
+      return '<div class="email-row">' +
+        '<span class="addr">' + r.email + '</span>' +
+        '<span class="status ' + (used ? 'used' : 'free') + '">' + (used ? ('مستخدم: @' + r.claimedBy) : 'لم تُستخدم بعد') + '</span>' +
+        '<span class="row-actions"><button class="icon-only-btn" data-email="' + r.email + '" title="حذف">🗑️</button></span>' +
+      '</div>';
+    }).join("");
+    emailsList.querySelectorAll("[data-email]").forEach(function(btn){
+      btn.addEventListener("click", function(){ removeAllowedEmail(btn.getAttribute("data-email")); });
+    });
+  }
+
+  function addAllowedEmails(){
+    var raw = emailsTextarea.value;
+    var candidates = raw.split(/[\n,;]+/).map(normalizeEmail).filter(function(e){ return e.length > 0; });
+    var valid = candidates.filter(function(e){ return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e); });
+    var invalidCount = candidates.length - valid.length;
+    if(!valid.length){
+      emailsMsg.innerHTML = '<span class="err">لم يتم العثور على بريد إلكتروني صالح.</span>';
+      return;
+    }
+    addEmailsBtn.disabled = true;
+    addEmailsBtn.textContent = "جارٍ الإضافة...";
+    var writes = Promise.all(valid.map(function(email){
+      return fs.collection("allowedEmails").doc(email).set({ addedAt: new Date().toISOString() }, { merge: true });
+    }));
+    writes.then(function(){
+      addEmailsBtn.disabled = false;
+      addEmailsBtn.textContent = "➕ إضافة البريد/البريدات";
+      emailsMsg.innerHTML = '<span class="ok">تمت إضافة ' + valid.length + ' بريد بنجاح.' + (invalidCount ? (' (تم تجاهل ' + invalidCount + ' غير صالح)') : '') + '</span>';
+      emailsTextarea.value = "";
+      loadAllowedEmails();
+    }).catch(function(){
+      addEmailsBtn.disabled = false;
+      addEmailsBtn.textContent = "➕ إضافة البريد/البريدات";
+      emailsMsg.innerHTML = '<span class="err">تعذّرت إضافة البريدات، حاولي مرة أخرى.</span>';
+    });
+  }
+
+  function removeAllowedEmail(email){
+    if(!confirm('هل تريدين حذف "' + email + '" من القائمة المصرّح لها؟')) return;
+    fs.collection("allowedEmails").doc(email).delete().then(function(){
+      loadAllowedEmails();
+    }).catch(function(){
+      alert("تعذّر حذف البريد، حاولي مرة أخرى.");
+    });
+  }
+
+  addEmailsBtn.addEventListener("click", addAllowedEmails);
 
 })();
 </script>
