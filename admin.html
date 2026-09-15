@@ -253,11 +253,10 @@
   </div>
 
   <div class="emails-card">
-    <div class="section-title"><span class="ico">📧</span><h3>الطالبات المصرّح لهن بالدخول للموقع</h3></div>
-    <p class="emails-hint">أضيفي هنا البريد الإلكتروني لكل طالبة مسموح لها بإنشاء حساب على الموقع (بريد واحد في كل سطر). أي بريد غير مضاف هنا لن يتمكن صاحبه من التسجيل.</p>
-    <textarea id="emailsTextarea" class="emails-textarea" placeholder="example1@school.sa
-example2@school.sa"></textarea>
-    <button class="btn btn-primary" id="addEmailsBtn" style="width:auto;padding:10px 22px;">➕ إضافة البريد/البريدات</button>
+    <div class="section-title"><span class="ico">📥</span><h3>رفع قائمة الطالبات (ملف إكسل)</h3></div>
+    <p class="emails-hint">ارفعي ملف إكسل (xlsx) أو CSV يحتوي على أعمدة: <b>الاسم</b>، <b>الصف</b>، <b>البريد الإلكتروني</b> (وعمود <b>الفصل</b> اختياري). عند دخول أي طالبة ببريدها لأول مرة، ستُملأ بياناتها تلقائيًا من هذا الملف.</p>
+    <input type="file" id="rosterFile" accept=".xlsx,.xls,.csv" />
+    <button class="btn btn-primary" id="uploadRosterBtn" style="width:auto;padding:10px 22px;margin-top:10px;">📤 معالجة الملف ورفعه</button>
     <div id="emailsMsg"></div>
     <div class="emails-list" id="emailsList"></div>
   </div>
@@ -265,6 +264,7 @@ example2@school.sa"></textarea>
 
 <div id="modalRoot"></div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
 <script>
@@ -325,7 +325,6 @@ example2@school.sa"></textarea>
     gateScreen.hidden = true;
     adminScreen.hidden = false;
     loadData();
-    loadAllowedEmails();
   }
 
   function tryUnlock(){
@@ -356,6 +355,7 @@ example2@school.sa"></textarea>
       populateFilters();
       renderStats();
       renderTable();
+      loadAllowedEmails();
     }).catch(function(e){
       tbody.innerHTML = '<tr class="empty-row"><td colspan="6">تعذّر تحميل البيانات. تأكدي من الاتصال بالإنترنت وحاولي التحديث.</td></tr>';
     });
@@ -551,8 +551,8 @@ example2@school.sa"></textarea>
     return (email||"").trim().toLowerCase();
   }
 
-  var addEmailsBtn = document.getElementById("addEmailsBtn");
-  var emailsTextarea = document.getElementById("emailsTextarea");
+  var rosterFileInput = document.getElementById("rosterFile");
+  var uploadRosterBtn = document.getElementById("uploadRosterBtn");
   var emailsMsg = document.getElementById("emailsMsg");
   var emailsList = document.getElementById("emailsList");
 
@@ -569,14 +569,17 @@ example2@school.sa"></textarea>
 
   function renderEmailsList(rows){
     if(!rows.length){
-      emailsList.innerHTML = '<div class="loading-line">لا توجد بريدات مضافة بعد.</div>';
+      emailsList.innerHTML = '<div class="loading-line">لم تُرفع أي بيانات بعد.</div>';
       return;
     }
+    var usedEmails = {};
+    allStudents.forEach(function(s){ usedEmails[s.username] = true; });
     emailsList.innerHTML = rows.map(function(r){
-      var used = !!r.claimedBy;
+      var used = !!usedEmails[r.email];
+      var meta = [r.grade, r.section].filter(Boolean).join(" · ");
       return '<div class="email-row">' +
-        '<span class="addr">' + r.email + '</span>' +
-        '<span class="status ' + (used ? 'used' : 'free') + '">' + (used ? ('مستخدم: @' + r.claimedBy) : 'لم تُستخدم بعد') + '</span>' +
+        '<span class="addr"><b>' + (r.displayName||"") + '</b>' + (meta ? (' &middot; ' + meta) : '') + ' &middot; ' + r.email + '</span>' +
+        '<span class="status ' + (used ? 'used' : 'free') + '">' + (used ? 'سجّلت دخولها' : 'لم تدخل بعد') + '</span>' +
         '<span class="row-actions"><button class="icon-only-btn" data-email="' + r.email + '" title="حذف">🗑️</button></span>' +
       '</div>';
     }).join("");
@@ -585,31 +588,97 @@ example2@school.sa"></textarea>
     });
   }
 
-  function addAllowedEmails(){
-    var raw = emailsTextarea.value;
-    var candidates = raw.split(/[\n,;]+/).map(normalizeEmail).filter(function(e){ return e.length > 0; });
-    var valid = candidates.filter(function(e){ return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e); });
-    var invalidCount = candidates.length - valid.length;
-    if(!valid.length){
-      emailsMsg.innerHTML = '<span class="err">لم يتم العثور على بريد إلكتروني صالح.</span>';
-      return;
+  var ROSTER_NAME_KEYS = ["الاسم", "الاسم الكامل", "اسم الطالبة", "الطالبة", "name"];
+  var ROSTER_GRADE_KEYS = ["الصف", "الصف الدراسي", "grade"];
+  var ROSTER_SECTION_KEYS = ["الفصل", "القسم", "section"];
+  var ROSTER_EMAIL_KEYS = ["البريد الإلكتروني", "الإيميل", "البريد", "email", "e-mail"];
+
+  function findRosterValue(row, keys){
+    var rowKeys = Object.keys(row);
+    for(var i=0;i<keys.length;i++){
+      for(var j=0;j<rowKeys.length;j++){
+        if(rowKeys[j].toString().trim().toLowerCase() === keys[i].toLowerCase()){
+          return row[rowKeys[j]];
+        }
+      }
     }
-    addEmailsBtn.disabled = true;
-    addEmailsBtn.textContent = "جارٍ الإضافة...";
-    var writes = Promise.all(valid.map(function(email){
-      return fs.collection("allowedEmails").doc(email).set({ addedAt: new Date().toISOString() }, { merge: true });
-    }));
-    writes.then(function(){
-      addEmailsBtn.disabled = false;
-      addEmailsBtn.textContent = "➕ إضافة البريد/البريدات";
-      emailsMsg.innerHTML = '<span class="ok">تمت إضافة ' + valid.length + ' بريد بنجاح.' + (invalidCount ? (' (تم تجاهل ' + invalidCount + ' غير صالح)') : '') + '</span>';
-      emailsTextarea.value = "";
-      loadAllowedEmails();
-    }).catch(function(){
-      addEmailsBtn.disabled = false;
-      addEmailsBtn.textContent = "➕ إضافة البريد/البريدات";
-      emailsMsg.innerHTML = '<span class="err">تعذّرت إضافة البريدات، حاولي مرة أخرى.</span>';
+    return "";
+  }
+
+  function commitRosterChunks(chunks, idx){
+    if(idx >= chunks.length) return Promise.resolve();
+    var batch = fs.batch();
+    chunks[idx].forEach(function(entry){
+      var ref = fs.collection("allowedEmails").doc(entry.email);
+      var payload = { displayName: entry.displayName, grade: entry.grade, addedAt: entry.addedAt };
+      if(entry.section){ payload.section = entry.section; }
+      batch.set(ref, payload, { merge: true });
     });
+    return batch.commit().then(function(){ return commitRosterChunks(chunks, idx + 1); });
+  }
+
+  function resetUploadBtn(){
+    uploadRosterBtn.disabled = false;
+    uploadRosterBtn.textContent = "📤 معالجة الملف ورفعه";
+  }
+
+  function handleRosterUpload(){
+    var file = rosterFileInput.files && rosterFileInput.files[0];
+    if(!file){ emailsMsg.innerHTML = '<span class="err">فضلًا اختاري ملفًا أولًا.</span>'; return; }
+    if(typeof XLSX === "undefined"){ emailsMsg.innerHTML = '<span class="err">تعذّر تحميل مكتبة قراءة الإكسل، تأكدي من الإنترنت وأعيدي تحميل الصفحة.</span>'; return; }
+
+    uploadRosterBtn.disabled = true;
+    uploadRosterBtn.textContent = "جارٍ المعالجة...";
+    emailsMsg.innerHTML = "";
+
+    var reader = new FileReader();
+    reader.onerror = function(){
+      resetUploadBtn();
+      emailsMsg.innerHTML = '<span class="err">تعذّرت قراءة الملف.</span>';
+    };
+    reader.onload = function(e){
+      try{
+        var workbook = XLSX.read(new Uint8Array(e.target.result), { type: "array" });
+        var sheet = workbook.Sheets[workbook.SheetNames[0]];
+        var rows = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+
+        var entries = [];
+        var invalidCount = 0;
+        rows.forEach(function(row){
+          var email = normalizeEmail(String(findRosterValue(row, ROSTER_EMAIL_KEYS) || ""));
+          var name = String(findRosterValue(row, ROSTER_NAME_KEYS) || "").trim();
+          var grade = String(findRosterValue(row, ROSTER_GRADE_KEYS) || "").trim();
+          var section = String(findRosterValue(row, ROSTER_SECTION_KEYS) || "").trim();
+          if(!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){ invalidCount++; return; }
+          var entry = { email: email, displayName: name, grade: grade, addedAt: new Date().toISOString() };
+          if(section){ entry.section = section; }
+          entries.push(entry);
+        });
+
+        if(!entries.length){
+          resetUploadBtn();
+          emailsMsg.innerHTML = '<span class="err">لم يتم العثور على أي صف يحتوي بريدًا إلكترونيًا صالحًا.</span>';
+          return;
+        }
+
+        var chunks = [];
+        for(var i=0;i<entries.length;i+=450){ chunks.push(entries.slice(i, i+450)); }
+
+        commitRosterChunks(chunks, 0).then(function(){
+          resetUploadBtn();
+          emailsMsg.innerHTML = '<span class="ok">تم رفع ' + entries.length + ' طالبة بنجاح.' + (invalidCount ? (' (تم تجاهل ' + invalidCount + ' صف غير صالح)') : '') + '</span>';
+          rosterFileInput.value = "";
+          loadAllowedEmails();
+        }).catch(function(){
+          resetUploadBtn();
+          emailsMsg.innerHTML = '<span class="err">تعذّر رفع البيانات لقاعدة البيانات، حاولي مرة أخرى.</span>';
+        });
+      }catch(err){
+        resetUploadBtn();
+        emailsMsg.innerHTML = '<span class="err">تعذّرت قراءة الملف، تأكدي أنه بصيغة إكسل أو CSV صحيحة.</span>';
+      }
+    };
+    reader.readAsArrayBuffer(file);
   }
 
   function removeAllowedEmail(email){
@@ -621,7 +690,7 @@ example2@school.sa"></textarea>
     });
   }
 
-  addEmailsBtn.addEventListener("click", addAllowedEmails);
+  uploadRosterBtn.addEventListener("click", handleRosterUpload);
 
 })();
 </script>
