@@ -588,16 +588,25 @@
     });
   }
 
-  var ROSTER_NAME_KEYS = ["الاسم", "الاسم الكامل", "اسم الطالبة", "الطالبة", "name"];
-  var ROSTER_GRADE_KEYS = ["الصف", "الصف الدراسي", "grade"];
-  var ROSTER_SECTION_KEYS = ["الفصل", "القسم", "section"];
-  var ROSTER_EMAIL_KEYS = ["البريد الإلكتروني", "الإيميل", "البريد", "email", "e-mail"];
+  function normalizeArabic(s){
+    return (s||"").toString().trim().toLowerCase()
+      .replace(/[إأآا]/g, "ا")
+      .replace(/ة/g, "ه")
+      .replace(/ى/g, "ي")
+      .replace(/\s+/g, " ");
+  }
 
-  function findRosterValue(row, keys){
+  var ROSTER_NAME_TOKENS = ["اسم"];
+  var ROSTER_GRADE_TOKENS = ["صف", "grade"];
+  var ROSTER_SECTION_TOKENS = ["فصل", "قسم", "section"];
+  var ROSTER_EMAIL_TOKENS = ["بريد", "ايميل", "email", "mail"];
+
+  function findRosterValue(row, tokens){
     var rowKeys = Object.keys(row);
-    for(var i=0;i<keys.length;i++){
-      for(var j=0;j<rowKeys.length;j++){
-        if(rowKeys[j].toString().trim().toLowerCase() === keys[i].toLowerCase()){
+    for(var j=0;j<rowKeys.length;j++){
+      var normKey = normalizeArabic(rowKeys[j]);
+      for(var i=0;i<tokens.length;i++){
+        if(normKey.indexOf(normalizeArabic(tokens[i])) !== -1){
           return row[rowKeys[j]];
         }
       }
@@ -645,10 +654,10 @@
         var entries = [];
         var invalidCount = 0;
         rows.forEach(function(row){
-          var email = normalizeEmail(String(findRosterValue(row, ROSTER_EMAIL_KEYS) || ""));
-          var name = String(findRosterValue(row, ROSTER_NAME_KEYS) || "").trim();
-          var grade = String(findRosterValue(row, ROSTER_GRADE_KEYS) || "").trim();
-          var section = String(findRosterValue(row, ROSTER_SECTION_KEYS) || "").trim();
+          var email = normalizeEmail(String(findRosterValue(row, ROSTER_EMAIL_TOKENS) || ""));
+          var name = String(findRosterValue(row, ROSTER_NAME_TOKENS) || "").trim();
+          var grade = String(findRosterValue(row, ROSTER_GRADE_TOKENS) || "").trim();
+          var section = String(findRosterValue(row, ROSTER_SECTION_TOKENS) || "").trim();
           if(!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){ invalidCount++; return; }
           var entry = { email: email, displayName: name, grade: grade, addedAt: new Date().toISOString() };
           if(section){ entry.section = section; }
