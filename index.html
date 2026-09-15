@@ -493,6 +493,22 @@
       return out;
     });
   }
+  function db_getSubmissionOne(username, weekKey){
+    return fs.collection("students").doc(username).collection("submissions").doc(weekKey).get().then(function(snap){
+      return snap.exists ? Object.assign({ week: weekKey }, snap.data()) : null;
+    });
+  }
+  function db_deleteSubmission(username, weekKey){
+    var studentRef = fs.collection("students").doc(username);
+    var subRef = studentRef.collection("submissions").doc(weekKey);
+    return subRef.delete().then(function(){
+      return studentRef.collection("submissions").orderBy("dateISO", "desc").limit(1).get();
+    }).then(function(qs){
+      var patch = { submissionsCount: FieldValue.increment(-1) };
+      patch.lastWeek = qs.empty ? FieldValue.delete() : qs.docs[0].id;
+      return studentRef.update(patch);
+    });
+  }
   function db_allStudentsRanked(){
     return fs.collection("students").orderBy("submissionsCount", "desc").limit(500).get().then(function(qs){
       var out = [];
@@ -677,13 +693,18 @@
       var already = results[1];
       if(!student){ return goAuth(); }
       renderChip(student);
-      buildSubmitScreen(username, student, weekKey, already);
+      if(already){
+        return db_getSubmissionOne(username, weekKey).then(function(sub){
+          buildSubmitScreen(username, student, weekKey, already, sub);
+        });
+      }
+      buildSubmitScreen(username, student, weekKey, already, null);
     }).catch(function(){
       renderConnError(function(){ renderSubmit(username); });
     });
   }
 
-  function buildSubmitScreen(username, student, weekKey, already){
+  function buildSubmitScreen(username, student, weekKey, already, currentSub){
     clearStage();
 
     var wrap = document.createElement("div");
@@ -700,10 +721,29 @@
         '<div class="done-card">' +
           '<div class="big-check">✅</div>' +
           '<h3>أنجزتِ مشاركة هذا الأسبوع بالفعل</h3>' +
-          '<p>أحسنتِ! عودي الأسبوع القادم لتوثيق ستريك جديد. يمكنكِ الآن متابعة إنجازاتك.</p>' +
+          '<p>هذه هي صورة مشاركتك لهذا الأسبوع. يمكنكِ حذفها ورفع صورة أخرى إذا أردتِ.</p>' +
         '</div>' +
-        '<button class="btn btn-primary" id="toDash" style="margin-top:16px">الذهاب إلى لوحة الإنجازات</button>';
+        (currentSub ? '<div class="preview-wrap"><img src="' + currentSub.image + '" alt="صورة مشاركة هذا الأسبوع" style="cursor:zoom-in" id="curSubImg" /></div>' : '') +
+        '<div class="preview-actions" style="margin-top:14px;">' +
+          (currentSub ? '<button class="btn btn-ghost" id="delSubBtn">حذف المشاركة</button>' : '') +
+          '<button class="btn btn-primary" id="toDash">الذهاب إلى لوحة الإنجازات</button>' +
+        '</div>';
       wrap.querySelector("#toDash").addEventListener("click", function(){ goDashboard(username); });
+      var curImg = wrap.querySelector("#curSubImg");
+      if(curImg) curImg.addEventListener("click", function(){ window.open(currentSub.image, "_blank"); });
+      var delBtn = wrap.querySelector("#delSubBtn");
+      if(delBtn) delBtn.addEventListener("click", function(){
+        if(!confirm("هل تريدين حذف مشاركة هذا الأسبوع؟ ستحتاجين لرفع صورة جديدة بعد الحذف.")) return;
+        delBtn.disabled = true;
+        delBtn.textContent = "جارٍ الحذف...";
+        db_deleteSubmission(username, weekKey).then(function(){
+          renderSubmit(username);
+        }).catch(function(){
+          delBtn.disabled = false;
+          delBtn.textContent = "حذف المشاركة";
+          alert("تعذّر حذف المشاركة، حاولي مرة أخرى.");
+        });
+      });
       stage.appendChild(wrap);
       return;
     }
@@ -846,7 +886,7 @@
 
     var historyHtml = subs.length ? subs.map(function(s){
       return '<div class="history-item">' +
-        '<img src="' + s.image + '" alt="صورة توثيق مشاركة أسبوع ' + s.week + '" />' +
+        '<img src="' + s.image + '" alt="صورة توثيق مشاركة أسبوع ' + s.week + '" class="hist-thumb" data-full="' + s.image + '" style="cursor:zoom-in" />' +
         '<div class="hi-text"><b>الأسبوع ' + s.week.split("-W")[1] + ' &middot; ' + s.week.split("-W")[0] + '</b><span>' + fmtDate(s.dateISO) + '</span></div>' +
         '<div class="hi-check">✔</div>' +
       '</div>';
@@ -883,7 +923,7 @@
               '<div class="badges-count">🏅 عدد الشارات المكتملة: ' + badgesEarned + '</div>' +
             '</div>' +
             '<div class="dash-actions">' +
-              (canSubmitThisWeek ? '<button class="btn btn-primary" id="newSub">تسجيل مشاركة جديدة</button>' : '<button class="btn btn-ghost" disabled>أنجزتِ مشاركة هذا الأسبوع ✓</button>') +
+              (canSubmitThisWeek ? '<button class="btn btn-primary" id="newSub">تسجيل مشاركة جديدة</button>' : '<button class="btn btn-ghost" id="viewSub">عرض مشاركة هذا الأسبوع ✓</button>') +
             '</div>' +
           '</div>' +
         '</div>' +
@@ -906,7 +946,14 @@
     if(canSubmitThisWeek){
       var btn = wrap.querySelector("#newSub");
       if(btn) btn.addEventListener("click", function(){ stage.classList.remove("wide"); goSubmit(username); });
+    } else {
+      var viewBtn = wrap.querySelector("#viewSub");
+      if(viewBtn) viewBtn.addEventListener("click", function(){ stage.classList.remove("wide"); goSubmit(username); });
     }
+
+    wrap.querySelectorAll(".hist-thumb").forEach(function(img){
+      img.addEventListener("click", function(){ window.open(img.getAttribute("data-full"), "_blank"); });
+    });
   }
 
   logoutBtn.addEventListener("click", function(){

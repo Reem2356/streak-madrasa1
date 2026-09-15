@@ -136,6 +136,12 @@
     padding:6px 12px; border-radius:8px; cursor:pointer; font-size:.78rem; font-weight:700;
   }
   .view-btn:hover{ background:var(--turquoise); color:#fff; }
+  .row-actions{ display:flex; align-items:center; gap:6px; white-space:nowrap; }
+  .icon-only-btn{
+    background:var(--surface-soft); border:1px solid var(--line); color:var(--ink-3);
+    padding:6px 9px; border-radius:8px; cursor:pointer; font-size:.85rem; line-height:1;
+  }
+  .icon-only-btn:hover{ border-color:var(--turquoise); }
   .empty-row td{ text-align:center; color:var(--text-muted); padding:30px 0; }
 
   /* ---- modal ---- */
@@ -155,7 +161,7 @@
     display:flex; align-items:center; gap:12px; background:var(--surface-soft);
     border:1px solid var(--line); border-radius:12px; padding:9px 12px; margin-bottom:8px;
   }
-  .sub-item img{ width:52px; height:52px; border-radius:10px; object-fit:cover; border:1px solid var(--line); cursor:zoom-in; }
+  .sub-item img{ width:72px; height:72px; border-radius:10px; object-fit:cover; border:1px solid var(--line); cursor:zoom-in; flex:none; }
   .sub-item .si-text b{ display:block; font-size:.85rem; color:var(--ink-3); }
   .sub-item .si-text span{ font-size:.72rem; color:var(--text-muted); }
 
@@ -392,12 +398,58 @@
         '<td>' + classLabel(s) + '</td>' +
         '<td class="count-pill">' + (s.submissionsCount||0) + '</td>' +
         '<td>' + (didThisWeek ? '<span class="status-ok">✔ نعم</span>' : '<span class="status-no">✘ لا</span>') + '</td>' +
-        '<td><button class="view-btn" data-username="' + s.username + '">عرض السجل</button></td>' +
+        '<td class="row-actions">' +
+          '<button class="view-btn" data-username="' + s.username + '">عرض السجل</button>' +
+          '<button class="icon-only-btn" data-action="edit" data-username="' + s.username + '" title="تعديل الاسم">✏️</button>' +
+          '<button class="icon-only-btn" data-action="delete" data-username="' + s.username + '" title="حذف الطالبة">🗑️</button>' +
+        '</td>' +
       '</tr>';
     }).join("");
 
     tbody.querySelectorAll(".view-btn").forEach(function(btn){
       btn.addEventListener("click", function(){ openHistoryModal(btn.getAttribute("data-username")); });
+    });
+    tbody.querySelectorAll('[data-action="edit"]').forEach(function(btn){
+      btn.addEventListener("click", function(){
+        var username = btn.getAttribute("data-username");
+        var s = allStudents.find(function(x){ return x.username === username; });
+        editStudentName(username, s ? s.displayName : "");
+      });
+    });
+    tbody.querySelectorAll('[data-action="delete"]').forEach(function(btn){
+      btn.addEventListener("click", function(){
+        var username = btn.getAttribute("data-username");
+        var s = allStudents.find(function(x){ return x.username === username; });
+        deleteStudent(username, s ? s.displayName : username);
+      });
+    });
+  }
+
+  function editStudentName(username, currentName){
+    var newName = prompt("تعديل اسم الطالبة:", currentName || "");
+    if(newName === null) return;
+    newName = newName.trim();
+    if(!newName) return;
+    fs.collection("students").doc(username).update({ displayName: newName }).then(function(){
+      loadData();
+    }).catch(function(){
+      alert("تعذّر تحديث الاسم، حاولي مرة أخرى.");
+    });
+  }
+
+  function deleteStudent(username, displayName){
+    if(!confirm('هل أنتِ متأكدة من حذف الطالبة "' + displayName + '" وجميع مشاركاتها نهائيًا؟ لا يمكن التراجع عن هذا الإجراء.')) return;
+    var studentRef = fs.collection("students").doc(username);
+    studentRef.collection("submissions").get().then(function(qs){
+      var deletes = [];
+      qs.forEach(function(doc){ deletes.push(doc.ref.delete()); });
+      return Promise.all(deletes);
+    }).then(function(){
+      return studentRef.delete();
+    }).then(function(){
+      loadData();
+    }).catch(function(){
+      alert("تعذّر حذف الطالبة، حاولي مرة أخرى.");
     });
   }
 
