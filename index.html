@@ -786,7 +786,7 @@
       var file = fileInput.files && fileInput.files[0];
       if(!file) return;
       submitErr.innerHTML = "";
-      resizeImage(file, 900, 0.8).then(function(dataUrl){
+      resizeImage(file, 720, 0.7).then(function(dataUrl){
         pendingDataUrl = dataUrl;
         uploaderBox.classList.add("has-file");
         previewSlot.innerHTML =
@@ -897,7 +897,7 @@
 
     var historyHtml = subs.length ? subs.map(function(s){
       return '<div class="history-item">' +
-        '<img src="' + s.image + '" alt="صورة توثيق مشاركة أسبوع ' + s.week + '" class="hist-thumb" data-full="' + s.image + '" style="cursor:zoom-in" />' +
+        '<img src="' + s.image + '" alt="صورة توثيق مشاركة أسبوع ' + s.week + '" class="hist-thumb" decoding="async" style="cursor:zoom-in" />' +
         '<div class="hi-text"><b>الأسبوع ' + s.week.split("-W")[1] + ' &middot; ' + s.week.split("-W")[0] + '</b><span>' + fmtDate(s.dateISO) + '</span></div>' +
         '<div class="hi-check">✔</div>' +
       '</div>';
@@ -963,7 +963,7 @@
     }
 
     wrap.querySelectorAll(".hist-thumb").forEach(function(img){
-      img.addEventListener("click", function(){ window.open(img.getAttribute("data-full"), "_blank"); });
+      img.addEventListener("click", function(){ window.open(img.src, "_blank"); });
     });
   }
 
